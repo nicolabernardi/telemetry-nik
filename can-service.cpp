@@ -1,4 +1,6 @@
 #include <linux/can.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <iostream>
 
@@ -10,7 +12,7 @@ int main()
     s = socket(PF_CAN, SOCK_RAW, CAN_RAW);
     if (s < 0)
     {
-        cerr << "error";
+        perror("error");
     }
     else
     {
@@ -29,10 +31,13 @@ int main()
             return 1;
         }
 
-        struct timeval tv;
-        ioctl(s, SIOCGSTAMP, &tv);
+        printf("data: %s", frame.data);
 
-        EagleTelemetry::CANMessage message;
-        message.setId(frame.can_id);
+        //struct timeval tv;
+        //ioctl(s, SIOCGSTAMP, &tv);
+
+        //EagleTelemetry::CANMessage message;
+        //message.setId(frame.can_id);
     }
+    return 0;
 }
