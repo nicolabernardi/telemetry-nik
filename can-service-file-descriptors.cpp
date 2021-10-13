@@ -82,7 +82,7 @@ int main()
                 //printf("%02X ",frame.data[i]);
                 sprintf(buffer+i*2, "%02X", frame.data[i]);
             }
-            buffer[frame.can_dlc*2+1] = 0; //end string
+            buffer[frame.can_dlc*2+1] = 0; //string terminator
 
             //printf("canid = %03X - ", frame.can_id);
             
