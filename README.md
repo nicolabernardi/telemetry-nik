@@ -11,3 +11,5 @@ where ``<error_code>`` follows a semantic related to this program, that is:
 2. error on binding the CAN socket   
 3. error on reading from CAN,   
 4. error while reopening the log file (that is periodically closed and reopened to be sure that updates are pushed to disk)   
+
+I used in C++ in order to use the ``bool`` type, that C has not. If necessary, I would change it easily to keep all in "pure" C.
