@@ -1,4 +1,4 @@
-# Reading message from CAN bus (socket) and logging to a file   
+# Reading messages from CAN bus (socket) and logging to a file   
 Launch first ``eagle virtualize can`` and ``eagle simulate can`` from eagle-cli command line tool.    
 Then launch ``./read-can`` (already compiled), or if you prefer you can re-compilate again.   
 CAN messages are logged into the file ``can.log`` with the following format (the same as the log file that eagle-cli uses):   
