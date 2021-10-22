@@ -16,6 +16,10 @@
 #define MAX_DATA_BYTE 8
 #define MAX_LOG_LENGTH_BYTE 100
 
+#define PILOT "default"
+#define RACE "default"
+#define CIRCUIT "default"
+
 int s, file;
 bool loop = true;
 char buffer[MAX_DATA_BYTE*2+1]; //each byte is represented with 2 hex symbols, so the length is #byte*2 chars + string terminator
@@ -39,6 +43,27 @@ void error_handler(const char *err_message, int no, bool quit){
     write(errfile, errbuffer, strlen(errbuffer));
     close(errfile);
     if(quit) exit(no);
+}
+
+/*
+
+    Prints to the open file indicated through the file descriptor fd the following header:
+
+    *** EAGLE-TRT
+    *** Telemetry Log File
+    *** <DATE>
+
+    *** Pilot: <PILOT>
+    *** Race: <RACE>
+    *** Circuit: <CIRCUIT>
+*/
+void print_file_header(int fd){
+    char headerbuffer[300];
+    time_t curtime;
+    time(&curtime);
+    snprintf(headerbuffer, 300, "\n*** EAGLE-TRT\n*** Telemetry Log File\n*** %s\n*** Pilot: %s\n*** Race: %s\n*** Circuit: %s\n\n", 
+        ctime(&curtime), PILOT, RACE, CIRCUIT);
+    write(fd, headerbuffer, strlen(headerbuffer));
 }
 
 int main()
@@ -76,6 +101,8 @@ int main()
         int nbytes;
         struct can_frame frame;
         int error_count = 0;
+
+        print_file_header(file);
 
         while(loop){
             nbytes = read(s, &frame, sizeof(struct can_frame));
