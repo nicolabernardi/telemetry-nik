@@ -1,0 +1,114 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef {{ filename.upper() }}_H
+#define {{ filename.upper() }}_H
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <assert.h>
+#include <stdio.h>
+
+/*
+*   NAKED SHARED 
+*   Common functions, defines and checks between all the network.h files
+*/
+#ifndef __NAKED_SHARED
+#define __NAKED_SHARED
+    /*
+    *   STDC Version check
+    *   check if STDC version is greater or equal than the minimum version required
+    */
+    #define NAKED_STDC_MIN_VERSION 201112L
+    #if __STDC_VERSION__ < NAKED_STDC_MIN_VERSION
+        #error "** STDC VERSION NOT SUPPORTED **"
+    #endif
+    
+    /*
+    *   Endianness check
+    *   static check for supported endianness
+    */
+    #ifndef __NAKED_ENDIAN_ORDER
+        #define __NAKED_ENDIAN_ORDER 1094861636L // "ABCD"
+    #endif
+    #if !defined(__NAKED_LITTLE_ENDIAN) && !defined(__NAKED_BIG_ENDIAN) && !defined(__NAKED_PDP_ENDIAN)
+        #if __NAKED_ENDIAN_ORDER==0x41424344UL 
+            #define __NAKED_LITTLE_ENDIAN
+        #elif __NAKED_ENDIAN_ORDER==0x44434241UL
+            #define __NAKED_BIG_ENDIAN
+        #elif __NAKED_ENDIAN_ORDER==0x42414443UL
+            #define __NAKED_PDP_ENDIAN
+        #else
+            #error "** HARDWARE ENDIANNESS NOT SUPPORTED **"
+        #endif
+    #endif
+    
+    #ifndef __NAKED_{{ endianness_tag }}
+        #error "** HARDWARE ENDIANNESS NOT SUPPORTED **"
+    #endif
+    
+    /*
+    *   Floating point types size check
+    *   the only supported sizes for now are 32 bits for float and 64 for double
+    */
+    static_assert(sizeof(float) == 4,"** THIS ARCHITECTURE DOESN'T MATCH THE EXPECTED SIZE FOR 'float' OF 4 BYTES **");
+    static_assert(sizeof(double) == 8, "** THIS ARCHITECTURE DOESN'T MATCH THE EXPECTED SIZE FOR 'double' OF 8 BYTES **");
+
+    /*
+    *   Packed macro
+    *   macro for packed structs on multiple compilers
+    */
+    #if defined(__MINGW32__)
+        #define __is_packed __attribute__((__gcc_struct__, __packed__)) // , __aligned__(1)))
+    #else
+        #define __is_packed __attribute__((__packed__)) // , __aligned__(1)))
+    #endif
+    
+    /*
+    *   Bitset setter/getter
+    *   macros for reading/writing bitsets
+    */
+    #define setBit(bitset, index, value) \
+    do { \
+        (bitset)[(index)/8] &= ~( 1 << (index) % 8); \
+        (bitset)[(index)/8] |=  ((value) << (index) % 8); \
+    } while(0);
+    #define flipBit(bitset, index) ((bitset)[(index)/8] ^= (1 << (index) % 8) )
+    #define getBit(bitset, index)  ((bitset)[(index)/8] &  (1 << (index) % 8) )
+#endif
+
+{% for bitset in bitsets %}
+typedef uint8_t {{ bitset.name }}[{{ bitset.size_bytes }}]; // bitset
+#define {{ bitset.name }}_default { {{ ', '.join(['0']*bitset.size_bytes) }} } // bitset filled with zeros
+    {%- for item_name, item_value in bitset.items %}
+#define {{ bitset.name }}_{{ item_name }} {{ item_value }}
+    {%- endfor %}
+{% endfor -%}
+
+{% for enum in enums %}
+typedef enum __is_packed {
+    {%- for item_name, item_value in enum.items %}
+    {{ enum.name }}_{{ item_name }} = {{ item_value }},
+    {%- endfor %}
+} {{ enum.name }};
+{% endfor -%}
+
+{% for struct in structs %}
+/* {{ struct.name }} */
+typedef struct __is_packed {
+    {%- for item_name, c_type in zip(struct.fields.keys(), c_types(struct)) %}
+    {{ c_type }} {{ item_name }};
+    {%- endfor %}
+} {{ struct.name }};
+static_assert(sizeof({{ struct.name }}) == {{ struct.size_bytes }}, "struct size mismatch");
+    
+size_t serialize_{{ struct.name }}(uint8_t* buffer, {{ ", ".join(parameters(struct)) }});
+size_t deserialize_{{ struct.name }}(uint8_t* buffer, {{ struct.name }}* {{ struct.name.lower() }});
+{% endfor -%}
+
+#endif
+
+#ifdef __cplusplus
+}
+#endif

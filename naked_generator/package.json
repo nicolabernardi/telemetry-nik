@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "jinja": "^0.13.4",
+    "jsonschema": "^1.4.0"
+  }
+}

@@ -12,6 +12,12 @@
 #include <signal.h>
 #include <errno.h>
 #include <time.h>
+#include "naked_generator/out/bms/c/bms.h"
+#include "naked_generator/out/Primary/c/Primary.h"
+#include "naked_generator/out/Secondary/c/Secondary.h"
+#include "includes_generator/out/bms/c/bms.h"
+#include "includes_generator/out/Primary/c/Primary.h"
+#include "includes_generator/out/Secondary/c/Secondary.h"
 
 #define MAX_DATA_BYTE 8
 #define MAX_LOG_LENGTH_BYTE 100
