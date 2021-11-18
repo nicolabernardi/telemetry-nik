@@ -12,12 +12,8 @@
 #include <signal.h>
 #include <errno.h>
 #include <time.h>
-#include "naked_generator/out/bms/c/bms.h"
-#include "naked_generator/out/Primary/c/Primary.h"
-#include "naked_generator/out/Secondary/c/Secondary.h"
-#include "includes_generator/out/bms/c/bms.h"
-#include "includes_generator/out/Primary/c/Primary.h"
-#include "includes_generator/out/Secondary/c/Secondary.h"
+#include "client_lib.c"
+
 
 #define MAX_DATA_BYTE 8
 #define MAX_LOG_LENGTH_BYTE 100
@@ -26,10 +22,20 @@
 #define RACE "default"
 #define CIRCUIT "default"
 
+#define SERVER_SEND_BUFF_DIM 256
+#define MSG_TO_SERVER_LEN 256*16
+#define SERVER_IP "192.168.1.119"
+#define SERVER_PORT 8000
+
 int s, file;
 bool loop = true;
 char buffer[MAX_DATA_BYTE*2+1]; //each byte is represented with 2 hex symbols, so the length is #byte*2 chars + string terminator
 char log_row_buffer[MAX_LOG_LENGTH_BYTE];
+int serversockfd;
+
+char sock_buffer[MSG_TO_SERVER_LEN];
+bool send_to_server = true;
+
 
 
 /* Handles program quitting/closing: closes CAN socket and log file */
@@ -37,6 +43,7 @@ void quit_handler(int signal){
     loop = false;
     if(s>0) close(s);
     if(file>0) close(file);
+    if(serversockfd>0) close(serversockfd);
     exit(0);
 }
 
@@ -81,6 +88,9 @@ int main()
     signal(SIGTSTP, quit_handler);
 
     int counter=0;
+    int count_msg_server = 0;
+    int pos_in_buffer = 1;
+    sock_buffer[0] = '[';
 
     s = socket(PF_CAN, SOCK_RAW, CAN_RAW);
 
@@ -92,8 +102,9 @@ int main()
     else{
     
         struct ifreq ifr;
-        strcpy(ifr.ifr_name, "vcan0" );
+        strcpy(ifr.ifr_name, "can0" );
         ioctl(s, SIOCGIFINDEX, &ifr);
+        
         
 
         struct sockaddr_can addr;
@@ -107,6 +118,11 @@ int main()
         int nbytes;
         struct can_frame frame;
         int error_count = 0;
+
+        serversockfd = connectToServer(SERVER_IP, SERVER_PORT);
+        if(serversockfd < 0){
+            fprintf(stderr, "Error on socket to server: %d\n", serversockfd);
+        }
 
         print_file_header(file);
 
@@ -135,8 +151,29 @@ int main()
                 //write to file
                 snprintf(log_row_buffer, MAX_LOG_LENGTH_BYTE, "(%ld.%06ld) %s %03X#%s\n", tv.tv_sec, tv.tv_usec, ifr.ifr_name, frame.can_id, buffer);
                 write(file, log_row_buffer, strlen(log_row_buffer));
-                
 
+                //send to server
+                if(!(serversockfd < 0) && send_to_server){
+                    sprintf(sock_buffer+pos_in_buffer, "(%ld.%06ld; %03X#%s)", tv.tv_sec, tv.tv_usec, frame.can_id, buffer);
+                    pos_in_buffer = strlen(sock_buffer);
+                    
+                    if(count_msg_server == 15){
+                        count_msg_server = 0;
+                        sprintf(sock_buffer+pos_in_buffer, "]");
+                        if(sendMessage(sock_buffer, MSG_TO_SERVER_LEN, serversockfd) < 0){
+                            send_to_server = false; //il server è crashato; non faccio crashare questo programma
+                        }
+                        //printf("sockbuffer = %s\n", sock_buffer);
+                        bzero(sock_buffer, MSG_TO_SERVER_LEN);
+                        sock_buffer[0] = '[';
+                        pos_in_buffer = 1;
+                    }else{
+                        count_msg_server++;
+                        sprintf(sock_buffer+pos_in_buffer, ",");
+                        pos_in_buffer++;
+                    }
+                }
+            
                 counter++;
 
                 //update file every 500 messages
