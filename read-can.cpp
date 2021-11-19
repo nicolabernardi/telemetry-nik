@@ -24,14 +24,14 @@
 
 #define SERVER_SEND_BUFF_DIM 256
 #define MSG_TO_SERVER_LEN 256*16
-#define SERVER_IP "192.168.1.119"
 #define SERVER_PORT 8000
+#define IP_ADDRESS_BUFFER_LEN 20 
 
 int s, file;
 bool loop = true;
 char buffer[MAX_DATA_BYTE*2+1]; //each byte is represented with 2 hex symbols, so the length is #byte*2 chars + string terminator
 char log_row_buffer[MAX_LOG_LENGTH_BYTE];
-int serversockfd;
+int serversockfd = -1;
 
 char sock_buffer[MSG_TO_SERVER_LEN];
 bool send_to_server = true;
@@ -119,11 +119,19 @@ int main()
         struct can_frame frame;
         int error_count = 0;
 
-        serversockfd = connectToServer(SERVER_IP, SERVER_PORT);
-        if(serversockfd < 0){
-            fprintf(stderr, "Error on socket to server: %d\n", serversockfd);
+        char ip_address[IP_ADDRESS_BUFFER_LEN];
+        int info_fd = open("server-ip.txt", O_RDONLY);
+        if(info_fd > 0){
+            read(info_fd, ip_address, IP_ADDRESS_BUFFER_LEN);
+            printf("server ip: %s\n", ip_address);
+            close(info_fd);
+            serversockfd = connectToServer(ip_address, SERVER_PORT);
+            if(serversockfd < 0){
+                fprintf(stderr, "Error on socket to server: %d\n", serversockfd);
+            }else
+                printf("connected to server\n");
         }
-
+        
         print_file_header(file);
 
         while(loop){
