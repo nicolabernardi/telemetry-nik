@@ -53,7 +53,7 @@ int sendMessage(char message[], int size, int sockfd) {
 
     feedback = write(sockfd, message, strlen(message));
 
-    if(feedback < 0) {
+    if(feedback <= 0) {
         perror("ERROR writing to socket");
         return -1;
     }

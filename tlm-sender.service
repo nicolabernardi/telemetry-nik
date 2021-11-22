@@ -1,0 +1,12 @@
+[Unit]
+Description=Telemetry sender service (log file and send raw msg to server)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=0
+ExecStart=/home/nicola/Desktop/Eagle/telemetry-nik/read-can
+
+[Install]
+WantedBy=multi-user.target

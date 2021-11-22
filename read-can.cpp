@@ -18,13 +18,17 @@
 #define MAX_DATA_BYTE 8
 #define MAX_LOG_LENGTH_BYTE 100
 
+#define TLM_ID 0xA0
+#define TLM_ENABLE_MESSAGE "6601000000000000"
+#define TLM_IDLE_MESSAGE "6600000000000000"
+
 #define PILOT "default"
 #define RACE "default"
 #define CIRCUIT "default"
 
 #define SERVER_SEND_BUFF_DIM 256
 #define MSG_TO_SERVER_LEN 256*16
-#define SERVER_IP "192.168.1.119"
+#define SERVER_IP "127.0.0.1"
 #define SERVER_PORT 8000
 
 int s, file;
@@ -36,6 +40,10 @@ int serversockfd;
 char sock_buffer[MSG_TO_SERVER_LEN];
 bool send_to_server = true;
 
+enum State{
+    IDLE = 0,
+    ENABLED = 1
+};
 
 
 /* Handles program quitting/closing: closes CAN socket and log file */
@@ -89,12 +97,22 @@ int main()
 
     int counter=0;
     int count_msg_server = 0;
-    int pos_in_buffer = 1;
-    sock_buffer[0] = '[';
+    int pos_in_buffer = 0;
+    //int pos_in_buffer = 1;
+    //sock_buffer[0] = '[';
+    //USO_NORMALE State currentState = IDLE;   //da rimettere questo
+    State currentState = ENABLED;     //per debug 
 
     s = socket(PF_CAN, SOCK_RAW, CAN_RAW);
 
-    file = open("can.log", O_WRONLY|O_APPEND|O_CREAT, 0666);
+    time_t rawtime;
+    struct tm *info;
+    time( &rawtime );
+    info = localtime( &rawtime );
+    char file_name[100];
+    sprintf(file_name, "/home/ubuntu/can_logger/can_%0d-%02d-%02d_%02d:%02d:%02d.log", 1900+info->tm_year, info->tm_mon, info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
+
+    file = open(file_name, O_WRONLY|O_APPEND|O_CREAT, 0666);
     if (s < 0 || file < 0)
     {
         error_handler(strerror(errno), 1, true);
@@ -148,45 +166,79 @@ int main()
                 }
                 buffer[frame.can_dlc*2+1] = 0; //string terminator
 
-                //write to file
-                snprintf(log_row_buffer, MAX_LOG_LENGTH_BYTE, "(%ld.%06ld) %s %03X#%s\n", tv.tv_sec, tv.tv_usec, ifr.ifr_name, frame.can_id, buffer);
-                write(file, log_row_buffer, strlen(log_row_buffer));
+                
+                switch(currentState){
+                    case IDLE:{
+                        if(frame.can_id == TLM_ID && strcmp(buffer, TLM_ENABLE_MESSAGE) == 0)
+                            currentState = ENABLED;
+                        break;
+                    }
+                    case ENABLED:{
 
-                //send to server
-                if(!(serversockfd < 0) && send_to_server){
-                    sprintf(sock_buffer+pos_in_buffer, "(%ld.%06ld; %03X#%s)", tv.tv_sec, tv.tv_usec, frame.can_id, buffer);
-                    pos_in_buffer = strlen(sock_buffer);
-                    
-                    if(count_msg_server == 15){
-                        count_msg_server = 0;
-                        sprintf(sock_buffer+pos_in_buffer, "]");
-                        if(sendMessage(sock_buffer, MSG_TO_SERVER_LEN, serversockfd) < 0){
-                            send_to_server = false; //il server è crashato; non faccio crashare questo programma
+                        if(frame.can_id == TLM_ID && strcmp(buffer, TLM_IDLE_MESSAGE) == 0)
+                            currentState = IDLE;
+                        else{
+                            //write to file
+                            snprintf(log_row_buffer, MAX_LOG_LENGTH_BYTE, "(%ld.%06ld) %s %03X#%s\n", tv.tv_sec, tv.tv_usec, ifr.ifr_name, frame.can_id, buffer);
+                            write(file, log_row_buffer, strlen(log_row_buffer));
+
+                            //send to server
+                            if(!(serversockfd < 0) && send_to_server){
+                                char buffer_padded[16+1];
+                                int len = strlen(buffer);
+                                for(int i=0; i>16-len; i++)
+                                    buffer_padded[i] = '0';
+                                for(int i=16-len; i<17; i++){
+                                    buffer_padded[i] = buffer[i-(16-len)];
+                                }
+                                printf("buffer_padded = %s\n", buffer_padded);
+                                sprintf(sock_buffer+pos_in_buffer, "(%ld.%06ld; %03X#%s)", tv.tv_sec, tv.tv_usec, frame.can_id, buffer_padded);
+                                pos_in_buffer = strlen(sock_buffer);
+                                //roba sperimentale
+                                /*if(sendMessage(sock_buffer, MSG_TO_SERVER_LEN, serversockfd) < 0){
+                                        send_to_server = false; //il server è crashato; non faccio crashare questo programma
+                                }
+                                bzero(sock_buffer, MSG_TO_SERVER_LEN);
+                                pos_in_buffer = 0;*/
+                                //fine roba sperimentale
+                                if(count_msg_server == 15){
+                                    count_msg_server = 0;
+                                    sprintf(sock_buffer+pos_in_buffer, "]");
+                                    printf("dim.stringa = %d\n", strlen(sock_buffer));
+                                    printf("%s\n", sock_buffer);
+                                    if(sendMessage(sock_buffer, MSG_TO_SERVER_LEN, serversockfd) < 0){
+                                        send_to_server = false; //il server è crashato; non faccio crashare questo programma
+                                    }
+                                    //printf("sockbuffer = %s\n", sock_buffer);
+                                    bzero(sock_buffer, MSG_TO_SERVER_LEN);
+                                    sock_buffer[0] = '[';
+                                    pos_in_buffer = 1;
+                                }else{
+                                    count_msg_server++;
+                                    sprintf(sock_buffer+pos_in_buffer, ",");
+                                    pos_in_buffer++;
+                                }
+                            }
+                        
+                            counter++;
+
+                            //update file every 500 messages
+                            if(counter == 500){
+                                counter = 0;
+                                close(file);
+                                //printf("closed file, now reopen\n"); //for debugging
+                                file = open(file_name, O_WRONLY|O_APPEND);
+                                if (file < 0)
+                                {
+                                    error_handler(strerror(errno), 4, true);
+                                }
+                            }
                         }
-                        //printf("sockbuffer = %s\n", sock_buffer);
-                        bzero(sock_buffer, MSG_TO_SERVER_LEN);
-                        sock_buffer[0] = '[';
-                        pos_in_buffer = 1;
-                    }else{
-                        count_msg_server++;
-                        sprintf(sock_buffer+pos_in_buffer, ",");
-                        pos_in_buffer++;
+                        
                     }
                 }
-            
-                counter++;
 
-                //update file every 500 messages
-                if(counter == 500){
-                    counter = 0;
-                    close(file);
-                    //printf("closed file, now reopen\n"); //for debugging
-                    file = open("can.log", O_WRONLY|O_APPEND);
-                    if (file < 0)
-                    {
-                        error_handler(strerror(errno), 4, true);
-                    }
-                }
+                
 
             }
         }
