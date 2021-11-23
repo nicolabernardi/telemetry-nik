@@ -17,4 +17,3 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 if not data or len(data) == 0:
                     break
                 conn.sendall(data)
-

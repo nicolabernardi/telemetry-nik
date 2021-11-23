@@ -28,7 +28,7 @@
 
 #define SERVER_SEND_BUFF_DIM 256
 #define MSG_TO_SERVER_LEN 256*16
-#define SERVER_IP "127.0.0.1"
+#define SERVER_IP "192.168.1.101"
 #define SERVER_PORT 8000
 
 int s, file;
@@ -36,6 +36,7 @@ bool loop = true;
 char buffer[MAX_DATA_BYTE*2+1]; //each byte is represented with 2 hex symbols, so the length is #byte*2 chars + string terminator
 char log_row_buffer[MAX_LOG_LENGTH_BYTE];
 int serversockfd;
+int file_tstamp;
 
 char sock_buffer[MSG_TO_SERVER_LEN];
 bool send_to_server = true;
@@ -51,6 +52,7 @@ void quit_handler(int signal){
     loop = false;
     if(s>0) close(s);
     if(file>0) close(file);
+    if(file_tstamp>0) close(file_tstamp);
     if(serversockfd>0) close(serversockfd);
     exit(0);
 }
@@ -97,9 +99,9 @@ int main()
 
     int counter=0;
     int count_msg_server = 0;
-    int pos_in_buffer = 0;
-    //int pos_in_buffer = 1;
-    //sock_buffer[0] = '[';
+    //int pos_in_buffer = 0;
+    int pos_in_buffer = 1;
+    sock_buffer[0] = '[';
     //USO_NORMALE State currentState = IDLE;   //da rimettere questo
     State currentState = ENABLED;     //per debug 
 
@@ -113,6 +115,7 @@ int main()
     sprintf(file_name, "/home/ubuntu/can_logger/can_%0d-%02d-%02d_%02d:%02d:%02d.log", 1900+info->tm_year, info->tm_mon, info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
 
     file = open(file_name, O_WRONLY|O_APPEND|O_CREAT, 0666);
+    file_tstamp = open("tstamp.log", O_WRONLY|O_CREAT, 0666);
     if (s < 0 || file < 0)
     {
         error_handler(strerror(errno), 1, true);
@@ -203,9 +206,15 @@ int main()
                                 //fine roba sperimentale
                                 if(count_msg_server == 15){
                                     count_msg_server = 0;
-                                    sprintf(sock_buffer+pos_in_buffer, "]");
+                                    sprintf(sock_buffer+pos_in_buffer, "]\n");
                                     printf("dim.stringa = %d\n", strlen(sock_buffer));
                                     printf("%s\n", sock_buffer);
+
+
+                                    char tstamp_log[100];
+                                    sprintf(tstamp_log, "%ld.%06ld\n", tv.tv_sec, tv.tv_usec);
+                                    write(file_tstamp, tstamp_log, strlen(tstamp_log));
+
                                     if(sendMessage(sock_buffer, MSG_TO_SERVER_LEN, serversockfd) < 0){
                                         send_to_server = false; //il server è crashato; non faccio crashare questo programma
                                     }
